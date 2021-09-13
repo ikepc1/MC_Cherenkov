@@ -215,7 +215,7 @@ if __name__ == '__main__':
 
     delta = 1.e-4
     t = 0.
-    N = 10000000
+    N = 10000
     mcc = mcCherenkov(t,delta,N)
 
     table_file = 'gg_t_delta_theta_2020_normalized.npz'
