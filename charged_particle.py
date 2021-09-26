@@ -9,6 +9,7 @@ Modified to include Douglas Bergman's 2013 parameterization, June 2020
 import numpy as np
 from scipy.constants import physical_constants
 from scipy.integrate import quad
+from scipy.stats import norm
 
 class EnergyDistribution:
     """
@@ -27,10 +28,10 @@ class EnergyDistribution:
                    [0.485,0.183,8.17e-4,3.22,0.0068,106.,1.00,1.0,0.0372],  # Ele
                    [0.516,0.201,5.42e-4,4.36,0.0663,143.,0.15,2.0,0.0374]]) # Pos
 
-    ll = np.log(1.e-1) #lower limit
-    ul = np.log(1.e+6) #upper limit
+    ll = np.log(1.e-4) #lower limit
+    # ul = np.log(1.e+6) #upper limit
 
-    def __init__(self,part,t):
+    def __init__(self,part,t,ul):
         """
         Set the parameterization constants for this type of particle. The normalization
         constant is determined for the given shower stage, (which can be changed later).
@@ -40,6 +41,7 @@ class EnergyDistribution:
         """
         self.p = self.pt[part]
         self.t = t
+        self.ul = ul
         self.normalize(t)
 
     # Functions for the top level parameters
@@ -245,7 +247,8 @@ class AngularDistribution:
         if self.schema == 'b':
             if self.log10E > 3.: # if the energy is greater than 1 TeV return a narrow Gaussian
                 sig = 5.e-4 * (1000./self.EGeV)
-                dist_value = self.C0 * np.exp(-(theta**2)/(2*sig**2))
+                # dist_value = self.C0 * np.exp(-(theta**2)/(2*sig**2))
+                dist_value = self.C0 * norm.pdf(theta,scale=sig)
             else:
                 t1 = self.a1b * np.exp(-self.c1b * theta - self.c2b * theta**2)
                 t2 = self.a2b / ((1 + theta * self.theta_0b)**(self.rb))

@@ -11,7 +11,7 @@ class CherenkovPhoton:
     inner_precision = 1.e-5
     outer_precision = 1.e-4
 
-    def __init__(self,t,delta,ntheta=321,minlgtheta=-3.,maxlgtheta=0.2):
+    def __init__(self,t,delta,ntheta=321,minlgtheta=-5.,maxlgtheta=0.2):
         """Create a normalized Cherenkov-photon angular distribution at the
         given shower stage, t, and with the index-of-refraction of the atmosphere
         given by delta. By default there are 321 logarithmically spaced angular

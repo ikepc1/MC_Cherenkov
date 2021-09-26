@@ -18,10 +18,10 @@ from cherenkov_photon_array import CherenkovPhotonArray as cpa
 
 class Egen(EnergyDistribution):
 
-    def __init__(self, t):
-        super().__init__('Tot',t)
+    def __init__(self, t, ul):
+        super().__init__('Tot',t, ul)
         self.t = t
-        self.lEs = np.linspace(np.log(1.e-4),self.ul,1000000)
+        self.lEs = np.linspace(self.ll,self.ul,1000000)
         self.cdf = self.make_cdf(self.lEs)
 
     def make_cdf(self,lEs):
@@ -40,16 +40,22 @@ class Qgen(AngularDistribution):
 
     def __init__(self, lE):
         super().__init__(lE)
-        self.qs = np.linspace(self.lls[0],self.uls[-1],10000)
+        # self.qs = np.linspace(self.lls[0],self.uls[-1],10000)
+        self.ul = self.set_upper_lim(lE)
+        self.qs = np.logspace(-9,np.log10(self.ul),10000)
         self.cdf = self.make_cdf(self.qs)
 
-    def cdf_integrand(self,q):
-        return self.n_t_lE_Omega(q) * np.sin(q) * 4 * np.pi
+    def set_upper_lim(self,lE):
+        if self.log10E > 3.:
+            return np.pi - (np.pi / np.log(1.e12)) * lE
+        else:
+            return np.pi
 
     def make_cdf(self,qs):
         cdf = np.empty_like(qs)
         cdf[0] = 0.
-        cdf[1:] = cumtrapz(self.cdf_integrand(qs),qs)
+        cdf[1:] = cumtrapz(self.norm_integrand(qs),qs)
+        # print(cdf.max())
         cdf /= cdf.max()
         return cdf
 
@@ -63,11 +69,11 @@ class mcCherenkov():
     c = value('speed of light in vacuum')
     hc = value('Planck constant in eV s') * c
 
-    def __init__(self, t, delta, Nch, min_l = 300, max_l = 600):
+    def __init__(self, t, delta, Nch, ul, min_l = 300, max_l = 600):
         self.t = t
         self.delta = delta
         self.threshold = cp.cherenkov_threshold(delta)
-        self.Egen = Egen(self.t)
+        self.Egen = Egen(self.t, ul)
         self.lE_array,_ = self.throw_lE(Nch)
         self.lE_above = self.lE_array[np.exp(self.lE_array)>self.threshold]
         self.cy_bool, self.cy = self.throw_gamma(self.lE_above)
@@ -166,6 +172,9 @@ class mcCherenkov():
         sorted_q = np.sort(theta)
         return (np.arange(theta.size) + 1)/theta.size, sorted_q
 
+    # def bin_historgram(self,theta):
+
+
 class table_CDF(cpa):
     def __init__(self, table, t, delta):
         super().__init__(table)
@@ -214,9 +223,9 @@ if __name__ == '__main__':
     plt.ion()
 
     delta = 1.e-4
-    t = 0.
-    N = 10000
-    mcc = mcCherenkov(t,delta,N)
+    t = -6.
+    N = 10000000
+    mcc = mcCherenkov(t,delta,N,np.log(1.e11))
 
     table_file = 'gg_t_delta_theta_2020_normalized.npz'
 
@@ -227,9 +236,13 @@ if __name__ == '__main__':
     d_omega_bins = np.linspace(min_Omega,np.pi,100000)
     d_theta_bins = np.arccos(1 - d_omega_bins / (2*np.pi))
     h,b = np.histogram(mcc.theta,bins = d_theta_bins)
-    h = h/np.trapz(h*np.sin(d_theta_bins[:-1])*4*np.pi,d_theta_bins[:-1])
-    plt.hist(d_theta_bins[:-1],bins = d_theta_bins, weights = h, histtype = 'step', label = 'thrown')
-    plt.semilogx()
+    mid_theta_bins = d_theta_bins[:-1] + np.diff(d_theta_bins) / 2.
+    int_midpoint = np.sum(h*np.sin(mid_theta_bins)*4*np.pi*np.diff(d_theta_bins))
+    int_trapz = np.trapz(h*np.sin(d_theta_bins[:-1])*4*np.pi,d_theta_bins[:-1])
+    h_mid = h / int_midpoint
+    h_trapz = h / int_trapz
+    plt.hist(d_theta_bins[:-1],bins = d_theta_bins, weights = h_mid, histtype = 'step', label = 'thrown')
+    plt.loglog()
 
     plt.plot(table.theta,table.angular_distribution(t,delta), label = 'table (for reference)')
     plt.legend()
