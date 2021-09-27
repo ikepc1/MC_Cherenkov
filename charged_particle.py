@@ -405,6 +405,26 @@ class LateralDistributionNKG:
         intgrl,eps = quad(self.AVG_integrand,0,1.e3)
         return intgrl
 
+    def n_t_rm_r(self,r,rm):
+        '''
+        This function returns the density of particles per unit area at a given
+        value of t and rm
+        Parameters:
+        r = distance from the shower axis (m)
+        rm = the Moliere radius for a given atmospheric height (m)
+
+        returns:
+        the density of particles per unit area
+        '''
+        X = r / rm
+        return self.n_t_lX(np.log(X)) / (2 * np.pi * (X * rm) ** 2)
+
+    def r_avg_integrand(self,r,rm):
+        return 2 * np.pi * r**2 * self.n_t_rm_r(r,rm)
+
+    def AVG_r(self,rm):
+        return quad(self.r_avg_integrand,1.e-5,1.e4, args = rm)[0]
+
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
