@@ -350,8 +350,8 @@ class LateralDistributionNKG:
 
     pm = {'zp00':0,'zp01':1,'zp10':2,'zp11':3,'xp10':4}
     pz = np.array([0.0238,1.069,0.0238,2.918,0.430])
-    ll = 1.e-3
-    ul = 1.e1
+    ll = np.log(1.e-3)
+    ul = np.log(1.e2)
 
     def __init__(self,t):
         self.t = t
@@ -370,7 +370,7 @@ class LateralDistributionNKG:
     def set_xp1(self):
         self.xp1 = self.pz[self.pm['xp10']]
 
-    def n_t_lX(self,X):
+    def n_t_lX(self,lX):
         """
         This function returns the particle lateral distribution as a
         function of the Moliere radius.
@@ -381,6 +381,7 @@ class LateralDistributionNKG:
         Returns:
         n_t_lX = the normalized lateral distribution value at X
         """
+        X = np.exp(lX)
         return self.C0 * X ** self.zp0 * (self.xp1 + X) ** self.zp1
 
     def set_t(self,t):
@@ -397,10 +398,11 @@ class LateralDistributionNKG:
         self.AVG = self.AVG_Moliere()
 
     def AVG_integrand(self,X):
-        return X * self.n_t_lX(X)
+        lX = np.log(X)
+        return self.n_t_lX(lX)
 
     def AVG_Moliere(self):
-        intgrl,eps = quad(self.AVG_integrand,self.ll,self.ul)
+        intgrl,eps = quad(self.AVG_integrand,0,1.e3)
         return intgrl
 
 
