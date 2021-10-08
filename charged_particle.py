@@ -350,7 +350,7 @@ class LateralDistributionNKG:
 
     pm = {'zp00':0,'zp01':1,'zp10':2,'zp11':3,'xp10':4}
     pz = np.array([0.0238,1.069,0.0238,2.918,0.430])
-    ll = np.log(1.e-3)
+    ll = np.log(1.e-5)
     ul = np.log(1.e2)
 
     def __init__(self,t):
@@ -402,13 +402,15 @@ class LateralDistributionNKG:
         return self.n_t_lX(lX)
 
     def AVG_Moliere(self):
-        intgrl,eps = quad(self.AVG_integrand,0,1.e3)
+        ll = np.exp(self.ll)
+        ul = np.exp(self.ul)
+        intgrl,eps = quad(self.AVG_integrand,ll,ul)
         return intgrl
 
     def n_t_rm_r(self,r,rm):
         '''
-        This function returns the density of particles per unit area at a given
-        value of t and rm
+        This function returns the density of particles per unit area at distance
+        r given values of t and rm.
         Parameters:
         r = distance from the shower axis (m)
         rm = the Moliere radius for a given atmospheric height (m)
@@ -423,7 +425,18 @@ class LateralDistributionNKG:
         return 2 * np.pi * r**2 * self.n_t_rm_r(r,rm)
 
     def AVG_r(self,rm):
-        return quad(self.r_avg_integrand,1.e-5,1.e4, args = rm)[0]
+        ll = np.exp(self.ll) * rm
+        ul = np.exp(self.ul) * rm
+        return quad(self.r_avg_integrand,ll,ul, args = rm)[0]
+
+    def r_avg_integrand_simple(self,r,rm):
+        X = r / rm
+        return self.n_t_lX(np.log(X))
+
+    def AVG_r_simple(self,rm):
+        ll = np.exp(self.ll) * rm
+        ul = np.exp(self.ul) * rm
+        return quad(self.r_avg_integrand_simple,ll,ul, args = rm)[0]
 
 
 if __name__ == '__main__':
@@ -431,13 +444,22 @@ if __name__ == '__main__':
     plt.ion()
 
     ld = LateralDistributionNKG(0)
-    X = np.linspace(ld.ll,ld.ul,1000)
     ts = np.linspace(-20,20,21)
     avg = np.empty_like(ts)
+    avg_r = np.empty_like(ts)
+    m = 78.
     for i,t in enumerate(ts):
         ld.set_t(t)
         avg[i] = ld.AVG
+        avg_r[i] = ld.AVG_r_simple(m)
     np.savez('lateral.npz',t=ts,avg=avg)
+    avg_X = avg_r / m
+    plt.figure()
+    plt.title('t vs avg Moliere')
+    plt.plot(ts,avg, label = "calc'd w'out r_m")
+    plt.plot(ts,avg_X, label = "calc'd with r_m")
+    plt.legend()
+
     # ll = np.radians(0.1)
     # ul = np.radians(45.)
     # lqrad = np.linspace(np.log(ll),np.log(ul),450)

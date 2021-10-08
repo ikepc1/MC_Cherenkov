@@ -8,14 +8,6 @@ from scipy.integrate import quad, cumtrapz
 from cherenkov_photon_array import CherenkovPhotonArray as cpa
 
 
-# class Egen(st.rv_continuous):
-#     def __init__(self, t):
-#         super().__init__()
-#         self.t = t
-#         self.fe = EnergyDistribution('Tot',t)
-#     def _pdf(self,lE):
-#         return self.fe.spectrum(lE)
-
 class Egen(EnergyDistribution):
 
     def __init__(self, t, ul):
