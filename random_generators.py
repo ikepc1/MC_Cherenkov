@@ -60,12 +60,15 @@ class mcCherenkov():
     """docstring for ."""
     c = value('speed of light in vacuum')
     hc = value('Planck constant in eV s') * c
+    table_file = 'gg_t_delta_theta_2020_normalized.npz'
+    ul = np.log(1.e11) #energy upper limit
 
-    def __init__(self, t, delta, Nch, ul, min_l = 300, max_l = 600):
+    def __init__(self, t, delta, Nch, min_l = 300, max_l = 600):
+        self.table = cpa(self.table_file)
         self.t = t
         self.delta = delta
         self.threshold = cp.cherenkov_threshold(delta)
-        self.Egen = Egen(self.t, ul)
+        self.Egen = Egen(self.t, self.ul)
         self.lE_array,_ = self.throw_lE(Nch)
         self.lE_above = self.lE_array[np.exp(self.lE_array)>self.threshold]
         self.cy_bool, self.cy = self.throw_gamma(self.lE_above)
@@ -73,7 +76,8 @@ class mcCherenkov():
         # self.theta_e = self.make_theta_e(self.lE_Cher)
         self.theta, self.theta_e, self.theta_g, self.phi = self.calculate_theta(self.lE_Cher)
         self.ecdf, self.sorted_theta = self.make_ecdf(self.theta)
-
+        self.theta_bins = self.make_bins()
+        self.gg, self.mid_bins = self.bin_historgram(self.theta,self.theta_bins)
         # self.weights = np.sin(self.theta)
         # weighted_contrib = np.ones(self.theta.size)*self.weights
         # self.ecdf = np.cumsum(weighted_contrib)/weighted_contrib.sum()
@@ -164,7 +168,20 @@ class mcCherenkov():
         sorted_q = np.sort(theta)
         return (np.arange(theta.size) + 1)/theta.size, sorted_q
 
-    # def bin_historgram(self,theta):
+    def make_bins(self):
+        half_diff = np.diff(np.log(self.table.theta))[0]/2
+        lgtheta_bins = np.log(self.table.theta) - half_diff
+        lgtheta_bins = np.append(lgtheta_bins, lgtheta_bins[-1] + half_diff)
+        theta_bins = np.exp(lgtheta_bins)
+        return theta_bins
+
+    def bin_historgram(self,theta,theta_bins):
+        h,b = np.histogram(theta,bins=theta_bins,weights = 1/np.sin(theta),density=True)
+        mid_theta_bins = theta_bins[:-1] + np.diff(theta_bins) / 2.
+        int_midpoint = np.sum(h*np.sin(mid_theta_bins)*4*np.pi*np.diff(theta_bins))
+        return h / int_midpoint, mid_theta_bins
+
+
 
 
 class table_CDF(cpa):
@@ -216,7 +233,7 @@ if __name__ == '__main__':
 
     delta = 1.e-4
     t = -6.
-    N = 10000000
+    N = 10000
     mcc = mcCherenkov(t,delta,N,np.log(1.e11))
 
     table_file = 'gg_t_delta_theta_2020_normalized.npz'
@@ -235,7 +252,7 @@ if __name__ == '__main__':
     h_trapz = h / int_trapz
     plt.hist(d_theta_bins[:-1],bins = d_theta_bins, weights = h_mid, histtype = 'step', label = 'thrown')
     plt.loglog()
-
+    plt.plot(mcc.mid_bins,mcc.gg)
     plt.plot(table.theta,table.angular_distribution(t,delta), label = 'table (for reference)')
     plt.legend()
     plt.title('%d MC trial Cherenkov distribution for stage = %.0f, and delta = %.4f'%(N,t,delta))
