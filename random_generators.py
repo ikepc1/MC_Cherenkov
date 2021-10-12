@@ -72,7 +72,8 @@ class mcCherenkov():
         self.lE_array = lE_array[lE_array>self.min_lE]
         self.theta_e = self.make_theta_e(self.lE_array)
         self.theta_bins, self.mid_theta_bins = self.make_bins()
-        self.gg_list = self.make_gg_list()
+        # self.gg_list = self.make_gg_list()
+        self.gg_array = self.make_gg_array()
 
     def make_gg_t_delta(self,delta):
         lE_Cher_bool = self.throw_gamma(self.lE_array,delta)
@@ -88,6 +89,12 @@ class mcCherenkov():
         for i,d in enumerate(self.table.delta):
             gg_list.append(self.make_gg_t_delta(d))
         return gg_list
+
+    def make_gg_array(self):
+        gg_array = np.empty((self.table.delta.size,self.table.theta.size))
+        for i,d in enumerate(self.table.delta):
+            gg_array[i] = self.make_gg_t_delta(d)
+        return gg_array
 
     def throw_lE(self, N=1):
         '''
@@ -239,7 +246,7 @@ if __name__ == '__main__':
     plt.ion()
 
     t = -6.
-    N = 50000000
+    N = 50000
 
     start_time = time.time()
     mcc = mcCherenkov(t,N)
@@ -250,7 +257,7 @@ if __name__ == '__main__':
     plt.figure()
     delta = mcc.table.delta[50]
     plt.plot(mcc.table.theta,mcc.table.angular_distribution(t,delta), label = 'table')
-    plt.plot(mcc.mid_theta_bins,mcc.gg_list[50], label = 'mc')
+    plt.plot(mcc.mid_theta_bins,mcc.gg_array[50], label = 'mc')
     plt.loglog()
     plt.legend()
 
