@@ -25,7 +25,7 @@ class Egen(EnergyDistribution):
 
     def gen_lE(self, N=1):
         rvs = st.uniform.rvs(size=N)
-        return np.interp(rvs,self.cdf,self.lEs), rvs
+        return np.interp(rvs,self.cdf,self.lEs)
 
 class Qgen(AngularDistribution):
     """docstring for ."""
@@ -62,26 +62,32 @@ class mcCherenkov():
     hc = value('Planck constant in eV s') * c
     table_file = 'gg_t_delta_theta_2020_normalized.npz'
     ul = np.log(1.e11) #energy upper limit
+    table = cpa(table_file)
+    min_lE = np.log(cp.cherenkov_threshold(table.delta.max()))
 
-    def __init__(self, t, delta, Nch, min_l = 300, max_l = 600):
-        self.table = cpa(self.table_file)
+    def __init__(self, t, Nch, min_l = 300, max_l = 600):
         self.t = t
-        self.delta = delta
-        self.threshold = cp.cherenkov_threshold(delta)
         self.Egen = Egen(self.t, self.ul)
-        self.lE_array,_ = self.throw_lE(Nch)
-        self.lE_above = self.lE_array[np.exp(self.lE_array)>self.threshold]
-        self.cy_bool, self.cy = self.throw_gamma(self.lE_above)
-        self.lE_Cher = self.lE_above[self.cy_bool]
-        # self.theta_e = self.make_theta_e(self.lE_Cher)
-        self.theta, self.theta_e, self.theta_g, self.phi = self.calculate_theta(self.lE_Cher)
-        self.ecdf, self.sorted_theta = self.make_ecdf(self.theta)
-        self.theta_bins = self.make_bins()
-        self.gg, self.mid_bins = self.bin_historgram(self.theta,self.theta_bins)
-        # self.weights = np.sin(self.theta)
-        # weighted_contrib = np.ones(self.theta.size)*self.weights
-        # self.ecdf = np.cumsum(weighted_contrib)/weighted_contrib.sum()
+        lE_array = self.throw_lE(Nch)
+        self.lE_array = lE_array[lE_array>self.min_lE]
+        self.theta_e = self.make_theta_e(self.lE_array)
+        self.theta_bins, self.mid_theta_bins = self.make_bins()
+        self.gg_list = self.make_gg_list()
 
+    def make_gg_t_delta(self,delta):
+        lE_Cher_bool = self.throw_gamma(self.lE_array,delta)
+        lE_Cher = self.lE_array[lE_Cher_bool]
+        theta_e = self.theta_e[lE_Cher_bool]
+        theta_g = cp.cherenkov_angle(np.exp(lE_Cher),delta)
+        phi = self.throw_phi(lE_Cher.size)
+        theta = cp.spherical_cosines(theta_e,theta_g,phi)
+        return self.make_gg(theta)
+
+    def make_gg_list(self):
+        gg_list = []
+        for i,d in enumerate(self.table.delta):
+            gg_list.append(self.make_gg_t_delta(d))
+        return gg_list
 
     def throw_lE(self, N=1):
         '''
@@ -133,9 +139,9 @@ class mcCherenkov():
         chq = cp.cherenkov_angle(1.e12,delta)
         return alpha_over_hbarc*np.sin(chq)**2*self.cherenkov_dE(min_l,max_l)
 
-    def throw_gamma(self,lEs):
-        cy = cp.cherenkov_yield(np.exp(lEs), self.delta)
-        return st.uniform.rvs(size=lEs.size) < cy, cy
+    def throw_gamma(self,lEs,delta):
+        cy = cp.cherenkov_yield(np.exp(lEs), delta)
+        return st.uniform.rvs(size=lEs.size) < cy
 
     def make_theta_e(self,lEs):
         '''
@@ -173,13 +179,13 @@ class mcCherenkov():
         lgtheta_bins = np.log(self.table.theta) - half_diff
         lgtheta_bins = np.append(lgtheta_bins, lgtheta_bins[-1] + half_diff)
         theta_bins = np.exp(lgtheta_bins)
-        return theta_bins
-
-    def bin_historgram(self,theta,theta_bins):
-        h,b = np.histogram(theta,bins=theta_bins,weights = 1/np.sin(theta),density=True)
         mid_theta_bins = theta_bins[:-1] + np.diff(theta_bins) / 2.
-        int_midpoint = np.sum(h*np.sin(mid_theta_bins)*4*np.pi*np.diff(theta_bins))
-        return h / int_midpoint, mid_theta_bins
+        return theta_bins, mid_theta_bins
+
+    def make_gg(self,theta):
+        h,b = np.histogram(theta,bins=self.theta_bins,weights = 1/np.sin(theta),density=True)
+        int_midpoint = np.sum(h*np.sin(self.mid_theta_bins)*4*np.pi*np.diff(self.theta_bins))
+        return h / int_midpoint
 
 
 
@@ -229,61 +235,73 @@ class table_CDF(cpa):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     from cherenkov_photon_array import CherenkovPhotonArray as cpa
+    import time
     plt.ion()
 
-    delta = 1.e-4
     t = -6.
-    N = 10000
-    mcc = mcCherenkov(t,delta,N,np.log(1.e11))
+    N = 50000000
 
-    table_file = 'gg_t_delta_theta_2020_normalized.npz'
+    start_time = time.time()
+    mcc = mcCherenkov(t,N)
+    end_time = time.time()
+    print("Generated cmc gg list for one stage in %.1f s"%(
+        end_time-start_time))
 
-    #plot theta histogram and table pdf
     plt.figure()
-    table = cpa(table_file)
-    min_Omega = -2 * np.pi * (np.cos(mcc.theta.min()) - 1)
-    d_omega_bins = np.linspace(min_Omega,np.pi,100000)
-    d_theta_bins = np.arccos(1 - d_omega_bins / (2*np.pi))
-    h,b = np.histogram(mcc.theta,bins = d_theta_bins)
-    mid_theta_bins = d_theta_bins[:-1] + np.diff(d_theta_bins) / 2.
-    int_midpoint = np.sum(h*np.sin(mid_theta_bins)*4*np.pi*np.diff(d_theta_bins))
-    int_trapz = np.trapz(h*np.sin(d_theta_bins[:-1])*4*np.pi,d_theta_bins[:-1])
-    h_mid = h / int_midpoint
-    h_trapz = h / int_trapz
-    plt.hist(d_theta_bins[:-1],bins = d_theta_bins, weights = h_mid, histtype = 'step', label = 'thrown')
+    delta = mcc.table.delta[50]
+    plt.plot(mcc.table.theta,mcc.table.angular_distribution(t,delta), label = 'table')
+    plt.plot(mcc.mid_theta_bins,mcc.gg_list[50], label = 'mc')
     plt.loglog()
-    plt.plot(mcc.mid_bins,mcc.gg)
-    plt.plot(table.theta,table.angular_distribution(t,delta), label = 'table (for reference)')
     plt.legend()
-    plt.title('%d MC trial Cherenkov distribution for stage = %.0f, and delta = %.4f'%(N,t,delta))
-    plt.xlabel('theta (rad)')
-    plt.ylabel('dN_gamma / dOmega')
 
-    #plot ecdf and cdf comparison
-    plt.figure()
-    plt.plot(np.sort(mcc.theta),mcc.ecdf, label = 'MC ecdf')
-
-    tcdf = table_CDF(table_file,t,delta)
-    table_sample = tcdf.gen_theta(N)[0]
-    table_sample_ecdf = (np.arange(N) + 1) / N
-    ks, p  = st.kstest(mcc.theta,tcdf.cdf_function)
-
-    plt.plot(tcdf.theta,tcdf.cdf, label = 'table cdf')
-    plt.plot(np.sort(table_sample),table_sample_ecdf, label = 'table sample ecdf')
-    plt.legend()
-    plt.xlabel('theta (rad)')
-    plt.ylabel('cdf')
-    plt.title('ks stat = %.3f, p value = %f'%(ks,p,))
-    plt.semilogx()
-
-
-    #plot energy histograms
-    plt.figure()
-    h,bins = np.histogram(np.exp(mcc.lE_array),bins = 100)
-    logbins = np.logspace(np.log10(bins[0]),np.log10(bins[-1]),len(bins))
-    plt.hist(np.exp(mcc.lE_array),bins = logbins,histtype = 'step',label='all energies')
-    plt.hist(np.exp(mcc.lE_above),bins = logbins,histtype = 'step',label='above threshold')
-    plt.hist(np.exp(mcc.lE_Cher),bins = logbins,histtype = 'step',label='Cherenkov producing')
-    plt.semilogx()
-    plt.title('Charged Particle MC Energy histogram for t = %.0f'%t)
-    plt.legend()
+    # table_file = 'gg_t_delta_theta_2020_normalized.npz'
+    #
+    # #plot theta histogram and table pdf
+    # plt.figure()
+    # table = cpa(table_file)
+    # min_Omega = -2 * np.pi * (np.cos(mcc.theta.min()) - 1)
+    # d_omega_bins = np.linspace(min_Omega,np.pi,100000)
+    # d_theta_bins = np.arccos(1 - d_omega_bins / (2*np.pi))
+    # h,b = np.histogram(mcc.theta,bins = d_theta_bins)
+    # mid_theta_bins = d_theta_bins[:-1] + np.diff(d_theta_bins) / 2.
+    # int_midpoint = np.sum(h*np.sin(mid_theta_bins)*4*np.pi*np.diff(d_theta_bins))
+    # int_trapz = np.trapz(h*np.sin(d_theta_bins[:-1])*4*np.pi,d_theta_bins[:-1])
+    # h_mid = h / int_midpoint
+    # h_trapz = h / int_trapz
+    # plt.hist(d_theta_bins[:-1],bins = d_theta_bins, weights = h_mid, histtype = 'step', label = 'thrown')
+    # plt.loglog()
+    # plt.plot(mcc.mid_bins,mcc.gg)
+    # plt.plot(table.theta,table.angular_distribution(t,delta), label = 'table (for reference)')
+    # plt.legend()
+    # plt.title('%d MC trial Cherenkov distribution for stage = %.0f, and delta = %.4f'%(N,t,delta))
+    # plt.xlabel('theta (rad)')
+    # plt.ylabel('dN_gamma / dOmega')
+    #
+    # #plot ecdf and cdf comparison
+    # plt.figure()
+    # plt.plot(np.sort(mcc.theta),mcc.ecdf, label = 'MC ecdf')
+    #
+    # tcdf = table_CDF(table_file,t,delta)
+    # table_sample = tcdf.gen_theta(N)[0]
+    # table_sample_ecdf = (np.arange(N) + 1) / N
+    # ks, p  = st.kstest(mcc.theta,tcdf.cdf_function)
+    #
+    # plt.plot(tcdf.theta,tcdf.cdf, label = 'table cdf')
+    # plt.plot(np.sort(table_sample),table_sample_ecdf, label = 'table sample ecdf')
+    # plt.legend()
+    # plt.xlabel('theta (rad)')
+    # plt.ylabel('cdf')
+    # plt.title('ks stat = %.3f, p value = %f'%(ks,p,))
+    # plt.semilogx()
+    #
+    #
+    # #plot energy histograms
+    # plt.figure()
+    # h,bins = np.histogram(np.exp(mcc.lE_array),bins = 100)
+    # logbins = np.logspace(np.log10(bins[0]),np.log10(bins[-1]),len(bins))
+    # plt.hist(np.exp(mcc.lE_array),bins = logbins,histtype = 'step',label='all energies')
+    # plt.hist(np.exp(mcc.lE_above),bins = logbins,histtype = 'step',label='above threshold')
+    # plt.hist(np.exp(mcc.lE_Cher),bins = logbins,histtype = 'step',label='Cherenkov producing')
+    # plt.semilogx()
+    # plt.title('Charged Particle MC Energy histogram for t = %.0f'%t)
+    # plt.legend()
